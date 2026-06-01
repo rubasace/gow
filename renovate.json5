@@ -1,0 +1,20 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "docker:enableMajor"
+  ],
+  "customManagers": [
+    // Dockerfile ARGs: a `# renovate: datasource=<ds> depName=<name>` comment
+    // followed by `ARG <ANYTHING>_VERSION=<value>` (e.g. SoH release pin).
+    {
+      "customType": "regex",
+      "fileMatch": [
+        "(^|/)Dockerfile$"
+      ],
+      "matchStrings": [
+        "# renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+ARG\\s+\\w+_VERSION=(?<currentValue>\\S+)"
+      ]
+    }
+  ]
+}

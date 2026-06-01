@@ -1,0 +1,7 @@
+*
+
+!images
+!images/**
+
+!.gitignore
+!renovate.json5

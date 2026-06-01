@@ -1,0 +1,7 @@
+# Build context only needs the Dockerfile and scripts/.
+# The ROM is NOT in the image (it lives in the runtime volume).
+README.md
+build-remote.sh
+wolf/
+.git
+**/.DS_Store
