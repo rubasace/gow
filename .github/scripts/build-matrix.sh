@@ -87,7 +87,11 @@ case "$event" in
       for n in "${names[@]}"; do
         n="$(printf '%s' "$n" | tr -d '[:space:]')"
         [ -n "$n" ] || continue
-        [ -f "images/$n/Dockerfile" ] && targets="${targets}images/$n"$'\n'
+        if [ ! -f "images/$n/Dockerfile" ]; then
+          echo "::error::Unknown image '$n' (no images/$n/Dockerfile). Available: $(list_all_dirs | xargs -n1 basename | paste -sd, -)" >&2
+          exit 1
+        fi
+        targets="${targets}images/$n"$'\n'
       done
     else
       targets="$(list_all_dirs)"

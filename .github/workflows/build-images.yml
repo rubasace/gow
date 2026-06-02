@@ -4,7 +4,7 @@ name: Build images
 # Container Registry (GHCR). Each image is tagged with `edge` (rolling, latest
 # build of the default branch) and — when the Dockerfile pins an upstream
 # version via a `# renovate:`-annotated `ARG <APP>_VERSION=` — with that exact
-# version too (e.g. shipofharkinian:9.2.3). Images are signed keyless with
+# version too (e.g. soh:9.2.3). Images are signed keyless with
 # cosign (Sigstore / GitHub OIDC). No Docker Hub involved.
 #
 # Adding a new image is zero-config: drop a folder under images/<name>/ with a
@@ -17,6 +17,16 @@ on:
       - 'images/**'
       - '.github/workflows/build-images.yml'
       - '.github/scripts/**'
+  # Manual "rebuild now" trigger (Actions tab, `gh workflow run`, or the API).
+  # Ignores the push diff/paths: it builds exactly what you ask for, whether or
+  # not anything changed — handy to re-publish after a failed run or to pick up a
+  # new base-app without a version bump.
+  workflow_dispatch:
+    inputs:
+      images:
+        description: 'Images to build, comma-separated (blank = all)'
+        required: false
+        default: ''
 
 # Don't publish two overlapping runs for the same ref; let an in-flight publish
 # finish rather than cancelling it half-pushed.
