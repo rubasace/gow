@@ -1,23 +1,23 @@
 # Paste this block into Wolf's config.toml (usually /etc/wolf/cfg/config.toml,
 # mounted into the Wolf container) and restart Wolf. It shows up in Moonlight.
 #
-# The "soh:wolf" image must exist LOCALLY on the host running Wolf
+# The "2s2h:wolf" image must exist LOCALLY on the host running Wolf
 # (Wolf launches containers via the host's docker.sock) -> build it there.
 
 [[apps]]
-title = "Ship of Harkinian"
+title = "2 Ship 2 Harkinian"
 start_virtual_compositor = true
 
 [apps.runner]
 type = "docker"
-name = "WolfSoH"
-image = "ghcr.io/rubasace/soh:edge"
+name = "Wolf2S2H"
+image = "ghcr.io/rubasace/2s2h:edge"
 # Settings + saves are PER-USER: Wolf already bind-mounts a per-profile home at
 # /home/retro automatically, so we don't mount anything for those.
 #
 # The only mount we add is the SHARED data folder you manage on the host (mounted at /roms):
-# drop your ROM (.z64) there (and mods/ if you use them). SoH generates the common oot.o2r and
-# the launcher promotes it back here
+# drop your ROM (.z64) there (and mods/ if you use them). 2S2H generates the common mm.o2r and
+# the launcher promotes it back here .
 mounts = ["/roms:/roms:rw"]
 env = [
   "RUN_SWAY=1",
