@@ -65,6 +65,7 @@ COPY configs/ /cfg/
 # startup-app.sh, which sources /opt/gow/startup.d/* (per-user setup: 10-soh-config.sh) and
 # finally launcher /opt/soh/launch-soh.sh. Users can mount more into either dir.
 COPY scripts/40-soh-bundle-links.sh /etc/cont-init.d/40-soh-bundle-links.sh
+COPY scripts/soh-lib.sh             /opt/soh/soh-lib.sh
 COPY scripts/startup-app.sh         /opt/gow/startup-app.sh
 COPY scripts/10-soh-config.sh       /opt/gow/startup.d/10-soh-config.sh
 COPY scripts/launch-soh.sh          /opt/soh/launch-soh.sh

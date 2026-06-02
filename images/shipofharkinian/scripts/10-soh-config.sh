@@ -25,20 +25,9 @@ ROM_PATH=""
 log() { echo "[SoH] $*"; }
 major() { printf '%s' "${1%%.*}"; }
 
-# Atomic publish to the SHARED dir (temp + rename): a concurrent session never sees a
-# half-written file, and two simultaneous publishes each write a COMPLETE file.
-publish() { # <src-file> <dest-path>
-  local src="$1" dest="$2" tmp
-  tmp="$(mktemp "${dest}.XXXXXX" 2>/dev/null)" || return 1
-  if cp -f "$src" "$tmp" 2>/dev/null && mv -f "$tmp" "$dest" 2>/dev/null; then return 0; fi
-  rm -f "$tmp" 2>/dev/null; return 1
-}
-publish_str() { # <string> <dest-path>
-  local str="$1" dest="$2" tmp
-  tmp="$(mktemp "${dest}.XXXXXX" 2>/dev/null)" || return 1
-  if printf '%s\n' "$str" > "$tmp" 2>/dev/null && mv -f "$tmp" "$dest" 2>/dev/null; then return 0; fi
-  rm -f "$tmp" 2>/dev/null; return 1
-}
+# Shared helpers: fsize, publish_file, publish_string, promote_o2r (atomic temp+rename).
+# shellcheck source=/dev/null
+source /opt/soh/soh-lib.sh
 
 mkdir -p "$WORK_DIR"
 cd "$WORK_DIR"
@@ -92,21 +81,10 @@ if [ -e "$SHARED_DIR/oot.o2r" ] && [ -f "$MARKER" ]; then
   fi
 fi
 
-# Promote a freshly-generated oot.o2r (SoH wrote it into the home) to the shared dir so it
-# becomes common, then drop the home copy — from now on the cont-init bundle symlink serves it.
-if [ -d "$SHARED_DIR" ] && [ ! -e "$SHARED_DIR/oot.o2r" ] && [ -f oot.o2r ] && [ ! -L oot.o2r ] && [ -w "$SHARED_DIR" ]; then
-  log "Promoting the generated oot.o2r to the shared dir (atomic)."
-  if publish oot.o2r "$SHARED_DIR/oot.o2r"; then
-    if [ -f oot-mq.o2r ] && [ ! -L oot-mq.o2r ]; then publish oot-mq.o2r "$SHARED_DIR/oot-mq.o2r" || true; fi
-    publish_str "$IMAGE_VER" "$MARKER" || true
-    rm -f oot.o2r oot-mq.o2r   # served by the bundle symlink now -> keep the home clean
-  else
-    log "Promotion skipped (another session may have won the race)."
-  fi
-fi
-
-# No home symlink for oot.o2r: the cont-init bundle bridge makes SoH find it in /roms. If a
-# previous session left a real oot.o2r in the home, it was promoted + removed just above.
+# Fallback promotion: if an EARLIER session left a real oot.o2r in the home (e.g. it was
+# extracted while /roms was read-only), promote it now. The MAIN promotion happens in
+# launch-soh.sh right after extraction (same session). No-op in steady state.
+promote_o2r
 
 # Mods: symlink provided mod archives from the shared dir into the per-user mods folder.
 # Symlink (not copy: would duplicate big packs per profile; not hardlink: can't cross the
@@ -124,11 +102,11 @@ if [ -d "$SHARED_DIR/mods" ]; then
 fi
 shopt -u nullglob
 
-# Decide the launch argument. SoH's extractor is GUI-driven (no headless mode):
-#   - oot.o2r present  -> no arg  => ZERO prompts.
-#   - no oot.o2r + ROM -> pass the ROM => ONE confirm popup, then extract + promote.
-# Exported so launch-soh.sh execs the binary with the ROM path quoted (launcher/sway would
-# split an unquoted path on spaces).
+# Decide the launch argument (consumed by launch-soh.sh):
+#   - oot.o2r available -> no arg  => SoH starts directly, ZERO prompts.
+#   - no oot.o2r + ROM  -> pass the ROM; launch-soh.sh extracts hands-free (background + kill +
+#     relaunch) and promotes the result. Exported so the ROM path stays quoted (launcher/sway
+#     would split it on spaces).
 if [ -e "$SHARED_DIR/oot.o2r" ] || [ -e oot.o2r ]; then
   log "oot.o2r available (shared bundle bridge) -> launching without prompts."
   export SOH_ROM_ARG=""
