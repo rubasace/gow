@@ -3,5 +3,9 @@
 !images
 !images/**
 
+!.github
+!.github/**
+
 !.gitignore
 !renovate.json5
+!README.md
