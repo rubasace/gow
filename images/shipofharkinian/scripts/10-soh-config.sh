@@ -7,13 +7,15 @@
 # must not change shell options permanently. Only SOH_ROM_ARG is exported onward.
 #
 # Data model (three places):
-#   - GAME_DIR   (/opt/soh/usr/bin)  read-only baked files: binary, soh.o2r, assets.
+#   - Image bundle (/opt/soh/usr/bin) read-only: binary + soh.o2r + assets + gamecontrollerdb.txt.
+#                                    SoH locates these in the bundle itself. /etc/cont-init.d/
+#                                    40-soh-bundle-links.sh (root) ALSO bridges oot.o2r/oot-mq.o2r
+#                                    into the bundle -> the shared dir, so the home needs no o2r symlink.
 #   - SHIP_HOME  ($HOME = /home/retro, from the image ENV) PER-USER: SoH reads/writes config,
 #                                    saves, logs, mods and the extraction output here.
 #   - SHARED_DIR (/roms)             SHARED mount you provide: the ROM (.z64) and the COMMON
 #                                    oot.o2r reused by every profile (+ mods/).
 
-GAME_DIR=/opt/soh/usr/bin
 WORK_DIR="${SHIP_HOME:-$HOME}"
 SHARED_DIR="${SOH_SHARED:-/roms}"
 MARKER="$SHARED_DIR/.soh-o2r-version"
@@ -48,11 +50,18 @@ if [ ! -f shipofharkinian.json ] && [ -f /cfg/shipofharkinian.json ]; then
   cp /cfg/shipofharkinian.json shipofharkinian.json
 fi
 
-# soh.o2r (engine archive) lives in the image bundle, but SoH mounts archives from the data
-# home (mMainPath = SHIP_HOME), so we bridge it in with a symlink. assets/ and
-# gamecontrollerdb.txt are served straight from the bundle (GetAppBundlePath /
-# LocateFileAcrossAppDirs) -> no symlink needed for those.
-ln -sf "$GAME_DIR/soh.o2r" soh.o2r
+# Nothing archive-related is symlinked into the home anymore: soh.o2r/assets/gamecontrollerdb.txt
+# are served from the bundle, and oot.o2r/oot-mq.o2r are bridged into the bundle by the cont-init
+# script. Clean up any home bridges left by older image versions (symlinks only, never real files —
+# a freshly-generated real oot.o2r awaiting promotion is NOT a symlink, so it's preserved).
+for bridge in soh.o2r oot.o2r oot-mq.o2r assets gamecontrollerdb.txt; do
+  if [ -L "$bridge" ]; then rm -f "$bridge"; fi
+done
+shopt -s nullglob
+for bridge in *.z64 *.n64 *.zip; do
+  if [ -L "$bridge" ]; then rm -f "$bridge"; fi
+done
+shopt -u nullglob
 
 # Locate the ROM in the shared dir (only needed if there's no oot.o2r yet). We pass it to SoH
 # by path (SOH_ROM_ARG) for extraction -> no symlink in the home needed.
@@ -83,21 +92,21 @@ if [ -e "$SHARED_DIR/oot.o2r" ] && [ -f "$MARKER" ]; then
   fi
 fi
 
-# Promote a per-user-generated oot.o2r to the shared dir so it becomes common.
+# Promote a freshly-generated oot.o2r (SoH wrote it into the home) to the shared dir so it
+# becomes common, then drop the home copy — from now on the cont-init bundle symlink serves it.
 if [ -d "$SHARED_DIR" ] && [ ! -e "$SHARED_DIR/oot.o2r" ] && [ -f oot.o2r ] && [ ! -L oot.o2r ] && [ -w "$SHARED_DIR" ]; then
   log "Promoting the generated oot.o2r to the shared dir (atomic)."
-  publish oot.o2r "$SHARED_DIR/oot.o2r" || log "Promotion skipped (another session may have won the race)."
-  if [ -f oot-mq.o2r ] && [ ! -L oot-mq.o2r ]; then publish oot-mq.o2r "$SHARED_DIR/oot-mq.o2r" || true; fi
-  publish_str "$IMAGE_VER" "$MARKER" || true
+  if publish oot.o2r "$SHARED_DIR/oot.o2r"; then
+    if [ -f oot-mq.o2r ] && [ ! -L oot-mq.o2r ]; then publish oot-mq.o2r "$SHARED_DIR/oot-mq.o2r" || true; fi
+    publish_str "$IMAGE_VER" "$MARKER" || true
+    rm -f oot.o2r oot-mq.o2r   # served by the bundle symlink now -> keep the home clean
+  else
+    log "Promotion skipped (another session may have won the race)."
+  fi
 fi
 
-# Use the shared (common) oot.o2r: symlink it into the home, dropping any per-user copy.
-# (Staleness was already handled above — if we reach here with a shared o2r, it's current.)
-if [ -e "$SHARED_DIR/oot.o2r" ]; then
-  rm -f oot.o2r oot-mq.o2r
-  ln -sf "$SHARED_DIR/oot.o2r" oot.o2r
-  if [ -e "$SHARED_DIR/oot-mq.o2r" ]; then ln -sf "$SHARED_DIR/oot-mq.o2r" oot-mq.o2r; fi
-fi
+# No home symlink for oot.o2r: the cont-init bundle bridge makes SoH find it in /roms. If a
+# previous session left a real oot.o2r in the home, it was promoted + removed just above.
 
 # Mods: symlink provided mod archives from the shared dir into the per-user mods folder.
 # Symlink (not copy: would duplicate big packs per profile; not hardlink: can't cross the
@@ -120,8 +129,8 @@ shopt -u nullglob
 #   - no oot.o2r + ROM -> pass the ROM => ONE confirm popup, then extract + promote.
 # Exported so launch-soh.sh execs the binary with the ROM path quoted (launcher/sway would
 # split an unquoted path on spaces).
-if [ -e oot.o2r ]; then
-  log "oot.o2r present -> launching without prompts."
+if [ -e "$SHARED_DIR/oot.o2r" ] || [ -e oot.o2r ]; then
+  log "oot.o2r available (shared bundle bridge) -> launching without prompts."
   export SOH_ROM_ARG=""
 elif [ -n "$ROM_PATH" ]; then
   log "No common oot.o2r -> will pass the ROM ($ROM_PATH); SoH extracts it with a single confirm."

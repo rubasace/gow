@@ -60,12 +60,14 @@ ENV SHIP_HOME=/home/retro
 # configs/ and they all land in /cfg.
 COPY configs/ /cfg/
 
-# gow contract: entrypoint -> startup.sh -> /opt/gow/startup-app.sh, which sources
-# /opt/gow/startup.d/* (as 'retro') and then runs launcher /opt/soh/launch-soh.sh.
-# Our per-user setup is the 10-soh-config.sh fragment; users can mount more into startup.d/.
-COPY scripts/startup-app.sh   /opt/gow/startup-app.sh
-COPY scripts/10-soh-config.sh /opt/gow/startup.d/10-soh-config.sh
-COPY scripts/launch-soh.sh    /opt/soh/launch-soh.sh
+# Init flow: entrypoint runs /etc/cont-init.d/* as ROOT (we add 40-soh-bundle-links.sh to
+# bridge the shared oot.o2r into the root-owned bundle), then drops to 'retro' and runs
+# startup-app.sh, which sources /opt/gow/startup.d/* (per-user setup: 10-soh-config.sh) and
+# finally launcher /opt/soh/launch-soh.sh. Users can mount more into either dir.
+COPY scripts/40-soh-bundle-links.sh /etc/cont-init.d/40-soh-bundle-links.sh
+COPY scripts/startup-app.sh         /opt/gow/startup-app.sh
+COPY scripts/10-soh-config.sh       /opt/gow/startup.d/10-soh-config.sh
+COPY scripts/launch-soh.sh          /opt/soh/launch-soh.sh
 RUN chmod +x /opt/gow/startup-app.sh /opt/soh/launch-soh.sh
 
 ENV RUN_SWAY=1 \
