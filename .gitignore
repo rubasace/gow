@@ -8,4 +8,5 @@
 
 !.gitignore
 !renovate.json5
+!CONTRIBUTING.md
 !README.md
