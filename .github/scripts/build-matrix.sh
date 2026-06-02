@@ -96,7 +96,7 @@ case "$event" in
     else
       targets="$(list_all_dirs)"
     fi ;;
-  push)
+  push | pull_request)
     targets="$(changed_dirs)" ;;
   *)
     targets="$(list_all_dirs)" ;;

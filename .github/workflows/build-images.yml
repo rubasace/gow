@@ -17,6 +17,16 @@ on:
       - 'images/**'
       - '.github/workflows/build-images.yml'
       - '.github/scripts/**'
+  # Validate PRs (e.g. Renovate version/digest bumps) before they merge: the same
+  # build runs but does NOT push or sign (see push:/if: guards below). Renovate's
+  # automerge waits for this check to go green, so a bump that breaks the build
+  # never lands on main.
+  pull_request:
+    branches: [main]
+    paths:
+      - 'images/**'
+      - '.github/workflows/build-images.yml'
+      - '.github/scripts/**'
   # Manual "rebuild now" trigger (Actions tab, `gh workflow run`, or the API).
   # Ignores the push diff/paths: it builds exactly what you ask for, whether or
   # not anything changed — handy to re-publish after a failed run or to pick up a
@@ -54,7 +64,9 @@ jobs:
         name: Compute build matrix
         env:
           GITHUB_EVENT_NAME: ${{ github.event_name }}
-          BEFORE_SHA: ${{ github.event.before }}
+          # push -> previous tip; pull_request -> the PR base. Either way we diff
+          # that against GITHUB_SHA to find which image folders changed.
+          BEFORE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
           GITHUB_SHA: ${{ github.sha }}
           IMAGES_INPUT: ${{ github.event.inputs.images }}
         run: bash .github/scripts/build-matrix.sh
@@ -80,6 +92,7 @@ jobs:
         run: echo "IMAGE=ghcr.io/${OWNER,,}/${{ matrix.name }}" >> "$GITHUB_ENV"
 
       - name: Log in to GHCR
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
