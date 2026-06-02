@@ -1,89 +1,17 @@
 #!/usr/bin/env bash
-# Runs inside the compositor (gow `launcher`), as user retro.
-#
-# Data model (three places):
-#   - GAME_DIR   (/opt/soh/usr/bin)  read-only baked files: binary, soh.o2r, assets.
-#   - WORK_DIR   ($HOME = /home/retro) PER-USER: Wolf auto-mounts the home per profile;
-#                                    SoH writes settings + saves here. We use the home
-#                                    ROOT (not a subdir) because it's the path base chowns
-#                                    and that sway/waybar already write to -> guaranteed
-#                                    writable, no stale-mountpoint ownership surprises.
-#   - SHARED_DIR (/mnt/soh-shared)   SHARED bind mount you provide: the ROM (.z64) and
-#                                    the COMMON oot.o2r reused by every profile.
-#
-# We keep the CWD in WORK_DIR (settings/saves stay per-user) and symlink the shared ROM +
-# common oot.o2r into it. If there's no common oot.o2r yet, SoH generates one from the ROM
-# and we promote it to SHARED_DIR so the next launch (and other profiles) reuse it.
+# Thin launch wrapper, run by `launcher` inside the compositor (as 'retro'). All per-user
+# prep already ran in /opt/gow/startup.d/10-soh-config.sh; here we only exec the binary,
+# passing the ROM as an argument when that fragment set SOH_ROM_ARG. Kept as a wrapper so
+# the ROM path stays a single quoted arg (launcher/sway would split it on spaces).
 set -euo pipefail
 
-GAME_DIR=/opt/soh/usr/bin
-BIN="$GAME_DIR/soh.elf"
-WORK_DIR="${SOH_HOME:-$HOME}"               # per-user Wolf home
-SHARED_DIR="${SOH_SHARED:-/mnt/soh-shared}" # shared mount: ROM + common oot.o2r
-MARKER="$SHARED_DIR/.soh-o2r-version"        # SoH version that generated the shared oot.o2r
-IMAGE_VER="${SOH_VERSION:-unknown}"
-ROM_PATH=""
+BIN=/opt/soh/usr/bin/soh.elf
+cd "${SHIP_HOME:-$HOME}" 2>/dev/null || true
 
-log() { echo "[SoH] $*"; }
-major() { printf '%s' "${1%%.*}"; }
-
-mkdir -p "$WORK_DIR"
-cd "$WORK_DIR"
-
-# Read-only baked files -> CWD.
-ln -sfn "$GAME_DIR/assets" assets
-ln -sf  "$GAME_DIR/soh.o2r" soh.o2r
-if [ -f "$GAME_DIR/gamecontrollerdb.txt" ]; then
-  ln -sf "$GAME_DIR/gamecontrollerdb.txt" gamecontrollerdb.txt
-fi
-
-# Shared ROM -> CWD (SoH validates by hash; only used if there's no oot.o2r yet).
-have_rom=0
-if [ -d "$SHARED_DIR" ]; then
-  shopt -s nullglob
-  for rom in "$SHARED_DIR"/*.z64 "$SHARED_DIR"/*.n64 "$SHARED_DIR"/*.zip; do
-    ln -sf "$rom" "./$(basename "$rom")"
-    have_rom=1
-    ROM_PATH="$rom"
-  done
-  shopt -u nullglob
-fi
-
-# Promote a per-user-generated oot.o2r to the shared dir so it becomes common.
-if [ -d "$SHARED_DIR" ] && [ ! -e "$SHARED_DIR/oot.o2r" ] && [ -f oot.o2r ] && [ ! -L oot.o2r ] && [ -w "$SHARED_DIR" ]; then
-  log "Promoviendo el oot.o2r generado al directorio compartido."
-  cp -f oot.o2r "$SHARED_DIR/oot.o2r"
-  if [ -f oot-mq.o2r ] && [ ! -L oot-mq.o2r ]; then cp -f oot-mq.o2r "$SHARED_DIR/oot-mq.o2r"; fi
-  printf '%s\n' "$IMAGE_VER" > "$MARKER" 2>/dev/null || true
-fi
-
-# Prefer the shared (common) oot.o2r: symlink it into CWD, dropping any per-user copy.
-if [ -e "$SHARED_DIR/oot.o2r" ]; then
-  rm -f oot.o2r oot-mq.o2r
-  ln -sf "$SHARED_DIR/oot.o2r" oot.o2r
-  if [ -e "$SHARED_DIR/oot-mq.o2r" ]; then ln -sf "$SHARED_DIR/oot-mq.o2r" oot-mq.o2r; fi
-  if [ -f "$MARKER" ]; then
-    stored="$(cat "$MARKER" 2>/dev/null || echo unknown)"
-    if [ "$(major "$stored")" != "$(major "$IMAGE_VER")" ]; then
-      log "AVISO: el oot.o2r compartido es de otra version MAYOR ($stored vs $IMAGE_VER)."
-      log "       Refrescalo: borra $SHARED_DIR/oot.o2r y arranca con la ROM presente, o reemplazalo."
-    fi
-  fi
-fi
-
-# Launch mode. SoH's extractor is GUI/popup-driven; there is NO fully headless
-# extraction in the runtime binary, so:
-#   - oot.o2r present  -> launch with no args  => ZERO prompts.
-#   - no oot.o2r + ROM -> pass the ROM as arg   => ONE confirm popup, then it extracts
-#                                                  and we promote it (so it's a one-time click).
-if [ -e oot.o2r ]; then
-  log "Arrancando $IMAGE_VER con oot.o2r presente (sin prompts). CWD=$WORK_DIR"
-  exec "$BIN" "$@"
-elif [ -n "$ROM_PATH" ]; then
-  log "Sin oot.o2r comun: arranco pasando la ROM ($ROM_PATH); SoH la extrae con un solo confirm."
-  exec "$BIN" "$ROM_PATH" "$@"
+if [ -n "${SOH_ROM_ARG:-}" ]; then
+  echo "[SoH] Launching with ROM: $SOH_ROM_ARG"
+  exec "$BIN" "$SOH_ROM_ARG"
 else
-  log "ERROR: no hay oot.o2r comun ni ROM en $SHARED_DIR."
-  log "       Copia tu ROM (OoT NTSC 1.0 US, .z64) o un oot.o2r ya generado a la carpeta compartida."
-  exec "$BIN" "$@"
+  echo "[SoH] Launching (oot.o2r present / no ROM arg)."
+  exec "$BIN"
 fi
