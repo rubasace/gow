@@ -35,16 +35,32 @@ launch.
 2. **Shared folder + ROM** on the host:
    ```bash
    sudo mkdir -p /mnt/wolf/shared/2ship2harkinian
-   sudo cp "your-rom.z64" /mnt/wolf/shared/2ship2harkinian/   # Majora's Mask NTSC US recommended
+   sudo cp "your-rom.z64" /mnt/wolf/shared/2ship2harkinian/   # MUST be NTSC-U (see Supported ROMs)
    # optional: drop an already-generated mm.o2r here to skip generation entirely
    # to let the container generate + share the mm.o2r itself, make the folder writable:
    sudo chown 1000:1000 /mnt/wolf/shared/2ship2harkinian
    ```
 3. Paste `wolf/config.snippet.toml` into Wolf's `config.toml` and restart Wolf. It shows up in Moonlight.
-4. **First connection:** if you didn't provide an `mm.o2r`, 2S2H extracts it from the ROM and shares it
-   back. This is **hands-free** — you see a brief extraction screen and an automatic restart, no clicks
-   (so a Moonlight gamepad user never gets stuck on a keyboard prompt). Settings and saves go to your
-   per-user home.
+4. **First connection:** if you didn't provide an `mm.o2r`, the container builds it from the ROM and
+   shares it back. This is **hands-free** — it does NOT use 2S2H's in-app extractor (which is gated
+   behind blocking SDL dialogs and a file picker a gamepad can't dismiss); instead it runs the bundled
+   **ZAPD** asset processor directly (`assets/extractor/ZAPD.out`, the exact invocation 2S2H uses
+   internally). You see the desktop for a moment while it extracts, then the game starts. Settings and
+   saves go to your per-user home.
+
+## Supported ROMs
+
+2S2H accepts **only NTSC-U** dumps (from upstream's [`supportedHashes.json`](https://github.com/HarbourMasters/2ship2harkinian/blob/master/docs/supportedHashes.json)):
+
+| Version | sha1 |
+| - | - |
+| **NTSC-U 1.0** (N64) | `d6133ace5afaa0882cf214cf88daba39e266c078` |
+| **NTSC-U GC** | `9743aa026e9269b339eb0e3044cd5830a440c1fd` |
+
+**PAL/Europe and JP ROMs are not supported** and extraction will fail on them — there's no PAL/JP
+config in the extractor. Verify your dump at <https://2ship.equipment/>. If the headless ZAPD build
+fails for any reason, the launcher falls back to 2S2H's own extractor (which needs a **mouse** to click
+through, once); the full ZAPD output is written to `~/2s2h-extract.log` in the profile home.
 
 ## Updating
 
@@ -72,7 +88,10 @@ The version pin (`ARG S2H_VERSION` in the Dockerfile) is kept up to date by Reno
 ## Notes
 
 - **No Master Quest:** Majora's Mask has a single ROM archive (`mm.o2r`), so there's no `oot-mq.o2r`
-  equivalent. That's the only structural difference from `soh`'s o2r handling.
+  equivalent.
+- **Extraction differs from `soh`:** SoH can extract by passing the ROM as an argument; 2S2H 4.0.2
+  removed that path (it only has a GUI extractor gated behind blocking dialogs + a file picker), so
+  this image generates `mm.o2r` itself by invoking the bundled ZAPD CLI headlessly instead.
 - **NVIDIA:** keep `/dev/nvidia*` in `GOW_REQUIRED_DEVICES` (already in the snippet); on Intel/AMD
   base-app's Mesa is enough.
 - **Not tested end-to-end** (no Docker in the authoring environment): built against the official 4.0.2

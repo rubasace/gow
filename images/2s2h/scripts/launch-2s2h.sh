@@ -1,75 +1,57 @@
 #!/usr/bin/env bash
-# Thin launch wrapper, run by `launcher` inside the compositor (as 'retro'). Per-user prep
-# already ran in /opt/gow/startup.d/10-2s2h-config.sh.
+# Launch wrapper, run by `launcher` inside the compositor (as 'retro'). Per-user prep already
+# ran in /opt/gow/startup.d/10-2s2h-config.sh, which exports S2H_ROM_PATH (the ROM to extract
+# from) when there's no mm.o2r yet.
 #
-# Normal path: just exec the binary — mm.o2r is already available (cont-init bundle bridge ->
-# /roms), so 2S2H starts with ZERO prompts.
+#   mm.o2r present  -> exec the binary, ZERO prompts.
+#   mm.o2r missing  -> build it HEADLESSLY with the bundled ZAPD CLI (see 2s2h-lib.sh), publish
+#                      it to /roms, then exec -> the binary finds it via the cont-init bundle
+#                      bridge, ZERO prompts. Why not let 2S2H extract itself: its in-app
+#                      extractor (InitOTR) is gated behind a blocking SDL "Generate one now?"
+#                      box and a zenity/kdialog file picker base-app doesn't ship — a Moonlight
+#                      gamepad can dismiss neither, and the argv extract path SoH uses is dead
+#                      code in 2S2H 4.0.2.
+#   ZAPD failed     -> fall back to 2S2H's own extractor: drop the ROM into its search dir (the
+#                      home) and exec plainly. That still needs a MOUSE to click through once,
+#                      but it's a real escape hatch instead of a hang.
 #
-# First-run / regenerated extraction: when there's no mm.o2r yet, 2S2H extracts it from the ROM
-# and then parks on a "Run 2S2H?" confirm popup that appears BEFORE the controller is initialized
-# -> it needs a keyboard, which a Moonlight gamepad user doesn't have. To keep it hands-free we
-# run the extraction in the background, wait for the archive to be fully written (its size stops
-# growing), kill that instance (popup and all), and relaunch clean -> the o2r now exists, so 2S2H
-# starts with no prompts. This also covers MAJOR-version regenerations (same extract path).
-#
-# No `set -e`: we manage the background job, polling and kills explicitly.
+# No `set -e`: extraction failure must fall through to the fallback, not abort the launch.
 set -uo pipefail
 
 BIN=/opt/2s2h/usr/bin/2s2h.elf
 HOME_DIR="${SHIP_HOME:-$HOME}"
 SHARED_DIR="${S2H_SHARED:-/roms}"
+MARKER="$SHARED_DIR/.2s2h-o2r-version"
+EXTRACT_LOG="$HOME_DIR/2s2h-extract.log"
 cd "$HOME_DIR" 2>/dev/null || true
 
 # shellcheck source=/dev/null
-source /opt/2s2h/2s2h-lib.sh   # fsize, publish_file, publish_string, promote_o2r
+source /opt/2s2h/2s2h-lib.sh   # fsize, publish_*, promote_o2r, detect_zapd_ver, zapd_extract
 
-o2r_available() {
-  [ -e mm.o2r ] || [ -e "$SHARED_DIR/mm.o2r" ]
-}
+log() { echo "[2S2H] $*"; }
+o2r_available() { [ -e mm.o2r ] || [ -e "$SHARED_DIR/mm.o2r" ]; }
 
-# Run 2S2H to extract mm.o2r from the ROM, then kill it once the archive is fully written, so
-# nobody has to click the post-extraction popup.
-extract_headless() { # <rom-path>
-  local rom="$1" pid sz prev=-1 stable=0 i
-  echo "[2S2H] First run: extracting mm.o2r from the ROM (no interaction needed)..."
-  # Output to /dev/null: the extraction UI is graphical; this also stops any stray child from
-  # holding the launcher's stdout open after we kill the instance.
-  "$BIN" "$rom" >/dev/null 2>&1 &
-  pid=$!
-  for i in $(seq 1 240); do
-    kill -0 "$pid" 2>/dev/null || break              # extractor exited by itself (done or error)
-    sz=0
-    if [ -e mm.o2r ]; then sz=$(fsize mm.o2r); fi
-    if [ "$sz" -gt 0 ] && [ "$sz" = "$prev" ]; then
-      stable=$((stable + 1))
-      [ "$stable" -ge 2 ] && break                   # size unchanged ~2s -> the copy finished
-    else
-      stable=0
-    fi
-    prev="$sz"
-    sleep 1
-  done
-  kill "$pid" 2>/dev/null
-  for i in 1 2 3 4 5; do kill -0 "$pid" 2>/dev/null || break; sleep 1; done
-  kill -9 "$pid" 2>/dev/null
-  wait "$pid" 2>/dev/null
-  echo "[2S2H] Extraction finished; relaunching cleanly."
-}
-
-if [ -n "${S2H_ROM_ARG:-}" ] && ! o2r_available; then
-  extract_headless "$S2H_ROM_ARG"
-  # Promote the freshly-extracted o2r to /roms (+ stamp the version marker), drop the home copy.
-  # Without this the regenerated o2r would sit in the home and the marker would stay missing.
-  promote_o2r
+if ! o2r_available && [ -n "${S2H_ROM_PATH:-}" ]; then
+  ver="$(detect_zapd_ver "$S2H_ROM_PATH")"
+  # Prefer publishing the shared (common) copy; fall back to the per-user home if /roms is RO.
+  if [ -d "$SHARED_DIR" ] && [ -w "$SHARED_DIR" ]; then dest="$SHARED_DIR/mm.o2r"; else dest="$HOME_DIR/mm.o2r"; fi
+  log "First run: building mm.o2r from the ROM headlessly via ZAPD ($ver) -> $dest"
+  log "      (takes a moment; full extractor output in $EXTRACT_LOG)"
+  if zapd_extract "$S2H_ROM_PATH" "$ver" "$dest" "$EXTRACT_LOG"; then
+    log "mm.o2r generated."
+    if [ "$dest" = "$SHARED_DIR/mm.o2r" ]; then publish_string "${S2H_VERSION:-unknown}" "$MARKER" || true; fi
+  else
+    log "Headless ZAPD extraction failed (see $EXTRACT_LOG) -> falling back to 2S2H's own extractor."
+    log "      It will pop a 'Generate one now?' dialog; dismiss it with a MOUSE (one-time)."
+    # 2S2H's extractor searches GetAppDirectoryPath() (= the home) for the ROM; symlinking it
+    # there lets it auto-detect and avoids the (missing) zenity/kdialog file picker.
+    ln -sf "$S2H_ROM_PATH" "./$(basename "$S2H_ROM_PATH")" 2>/dev/null || true
+  fi
 fi
 
 if o2r_available; then
-  echo "[2S2H] Launching with mm.o2r present (no prompts)."
-  exec "$BIN"
-elif [ -n "${S2H_ROM_ARG:-}" ]; then
-  echo "[2S2H] No mm.o2r after extraction; launching with the ROM so 2S2H can surface the issue."
-  exec "$BIN" "$S2H_ROM_ARG"
+  log "Launching with mm.o2r present (no prompts)."
 else
-  echo "[2S2H] Launching 2 Ship 2 Harkinian."
-  exec "$BIN"
+  log "Launching 2 Ship 2 Harkinian."
 fi
+exec "$BIN"

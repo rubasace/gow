@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
 # Sourced by startup-app.sh from /opt/gow/startup.d/ (kodi-style), as user 'retro', just
-# before the compositor starts. Prepares 2S2H's per-user data home and decides the launch
-# argument (exported as S2H_ROM_ARG, consumed by /opt/2s2h/launch-2s2h.sh). UNPRIVILEGED.
+# before the compositor starts. Prepares 2S2H's per-user data home and, when there's no mm.o2r
+# yet, exports S2H_ROM_PATH (the ROM that launch-2s2h.sh extracts from). UNPRIVILEGED.
 #
 # NOTE: this file is *sourced*, not executed — it runs under startup-app.sh's `set -e` and
-# must not change shell options permanently. Only S2H_ROM_ARG is exported onward.
+# must not change shell options permanently. Only S2H_ROM_PATH is exported onward.
 #
 # Data model (three places):
 #   - Image bundle (/opt/2s2h/usr/bin) read-only: binary + 2ship.o2r + assets + gamecontrollerdb.txt.
@@ -55,8 +55,8 @@ for bridge in *.z64 *.n64 *.zip; do
 done
 shopt -u nullglob
 
-# Locate the ROM in the shared dir (only needed if there's no mm.o2r yet). We pass it to 2S2H
-# by path (S2H_ROM_ARG) for extraction -> no symlink in the home needed.
+# Locate the ROM in the shared dir (only needed if there's no mm.o2r yet). We hand its path to
+# launch-2s2h.sh (S2H_ROM_PATH), which builds mm.o2r from it headlessly -> no home symlink.
 have_rom=0
 if [ -d "$SHARED_DIR" ]; then
   shopt -s nullglob
@@ -105,19 +105,19 @@ if [ -d "$SHARED_DIR/mods" ]; then
 fi
 shopt -u nullglob
 
-# Decide the launch argument (consumed by launch-2s2h.sh):
-#   - mm.o2r available -> no arg  => 2S2H starts directly, ZERO prompts.
-#   - no mm.o2r + ROM  -> pass the ROM; launch-2s2h.sh extracts hands-free (background + kill +
-#     relaunch) and promotes the result. Exported so the ROM path stays quoted (launcher/sway
-#     would split it on spaces).
+# Decide what launch-2s2h.sh does (S2H_ROM_PATH, exported so the path stays quoted — launcher/
+# sway would otherwise split it on spaces):
+#   - mm.o2r available -> empty  => 2S2H starts directly, ZERO prompts.
+#   - no mm.o2r + ROM  -> the ROM path; launch builds mm.o2r headlessly via the bundled ZAPD CLI
+#                         and publishes it back (no in-app GUI extractor, no clicks).
 if [ -e "$SHARED_DIR/mm.o2r" ] || [ -e mm.o2r ]; then
   log "mm.o2r available (shared bundle bridge) -> launching without prompts."
-  export S2H_ROM_ARG=""
+  export S2H_ROM_PATH=""
 elif [ -n "$ROM_PATH" ]; then
-  log "No common mm.o2r -> will pass the ROM ($ROM_PATH); 2S2H extracts it with a single confirm."
-  export S2H_ROM_ARG="$ROM_PATH"
+  log "No common mm.o2r -> launch will build it from the ROM ($ROM_PATH) headlessly."
+  export S2H_ROM_PATH="$ROM_PATH"
 else
   log "ERROR: no common mm.o2r and no ROM in $SHARED_DIR."
-  log "       Copy your ROM (Majora's Mask NTSC US, .z64) or an already-generated mm.o2r to the shared folder."
-  export S2H_ROM_ARG=""
+  log "       Copy your ROM (Majora's Mask NTSC-U 1.0 or NTSC-U GC, .z64) or a generated mm.o2r to the shared folder."
+  export S2H_ROM_PATH=""
 fi
