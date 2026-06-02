@@ -10,12 +10,12 @@
 #   - GAME_DIR   (/opt/soh/usr/bin)  read-only baked files: binary, soh.o2r, assets.
 #   - SHIP_HOME  ($HOME = /home/retro, from the image ENV) PER-USER: SoH reads/writes config,
 #                                    saves, logs, mods and the extraction output here.
-#   - SHARED_DIR (/mnt/soh-shared)   SHARED mount you provide: the ROM (.z64) and the COMMON
-#                                    oot.o2r reused by every profile.
+#   - SHARED_DIR (/roms)             SHARED mount you provide: the ROM (.z64) and the COMMON
+#                                    oot.o2r reused by every profile (+ mods/).
 
 GAME_DIR=/opt/soh/usr/bin
 WORK_DIR="${SHIP_HOME:-$HOME}"
-SHARED_DIR="${SOH_SHARED:-/mnt/soh-shared}"
+SHARED_DIR="${SOH_SHARED:-/roms}"
 MARKER="$SHARED_DIR/.soh-o2r-version"
 IMAGE_VER="${SOH_VERSION:-unknown}"
 ROM_PATH=""
@@ -48,20 +48,18 @@ if [ ! -f shipofharkinian.json ] && [ -f /cfg/shipofharkinian.json ]; then
   cp /cfg/shipofharkinian.json shipofharkinian.json
 fi
 
-# Read-only baked files -> home. (soh.o2r/assets also resolve from the image bundle via
-# LocateFileAcrossAppDirs, but we link them too as belt-and-suspenders.)
-ln -sfn "$GAME_DIR/assets" assets
-ln -sf  "$GAME_DIR/soh.o2r" soh.o2r
-if [ -f "$GAME_DIR/gamecontrollerdb.txt" ]; then
-  ln -sf "$GAME_DIR/gamecontrollerdb.txt" gamecontrollerdb.txt
-fi
+# soh.o2r (engine archive) lives in the image bundle, but SoH mounts archives from the data
+# home (mMainPath = SHIP_HOME), so we bridge it in with a symlink. assets/ and
+# gamecontrollerdb.txt are served straight from the bundle (GetAppBundlePath /
+# LocateFileAcrossAppDirs) -> no symlink needed for those.
+ln -sf "$GAME_DIR/soh.o2r" soh.o2r
 
-# Shared ROM -> home (SoH validates by hash; only used if there's no oot.o2r yet).
+# Locate the ROM in the shared dir (only needed if there's no oot.o2r yet). We pass it to SoH
+# by path (SOH_ROM_ARG) for extraction -> no symlink in the home needed.
 have_rom=0
 if [ -d "$SHARED_DIR" ]; then
   shopt -s nullglob
   for rom in "$SHARED_DIR"/*.z64 "$SHARED_DIR"/*.n64 "$SHARED_DIR"/*.zip; do
-    ln -sf "$rom" "./$(basename "$rom")"
     have_rom=1
     ROM_PATH="$rom"
   done

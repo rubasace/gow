@@ -15,12 +15,11 @@ image = "soh:wolf"
 # Settings + saves are PER-USER: Wolf already bind-mounts a per-profile home at
 # /home/retro automatically, so we don't mount anything for those.
 #
-# The only mount we add is the SHARED data folder you manage on the host: drop your
-# ROM (.z64) there and, optionally, a pre-generated common oot.o2r. If there's no
-# oot.o2r yet, SoH generates one and the launcher promotes it back here (needs the
-# host folder writable by uid 1000: `sudo chown 1000:1000 /mnt/wolf/shared/shipofharkinian`).
-# If you'll always provide the oot.o2r yourself, you can make this mount read-only (:ro).
-mounts = ["/mnt/wolf/shared/shipofharkinian:/mnt/soh-shared:rw"]
+# The only mount we add is the SHARED data folder you manage on the host (mounted at /roms):
+# drop your ROM (.z64) there (and mods/ if you use them). SoH generates the common oot.o2r and
+# the launcher promotes it back here (needs the host folder writable by uid 1000:
+# `sudo chown 1000:1000 /mnt/wolf/shared/shipofharkinian`).
+mounts = ["/mnt/wolf/shared/shipofharkinian:/roms:rw"]
 env = [
   "RUN_SWAY=1",
   "GOW_REQUIRED_DEVICES=/dev/input/* /dev/dri/* /dev/nvidia* /dev/uinput",
