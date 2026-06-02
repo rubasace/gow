@@ -3,23 +3,26 @@
 #
 # Data model (three places):
 #   - GAME_DIR   (/opt/soh/usr/bin)  read-only baked files: binary, soh.o2r, assets.
-#   - WORK_DIR   ($HOME/soh)         PER-USER: Wolf auto-mounts the home per profile;
-#                                    SoH writes settings + saves here (persist per user).
+#   - WORK_DIR   ($HOME = /home/retro) PER-USER: Wolf auto-mounts the home per profile;
+#                                    SoH writes settings + saves here. We use the home
+#                                    ROOT (not a subdir) because it's the path base chowns
+#                                    and that sway/waybar already write to -> guaranteed
+#                                    writable, no stale-mountpoint ownership surprises.
 #   - SHARED_DIR (/mnt/soh-shared)   SHARED bind mount you provide: the ROM (.z64) and
 #                                    the COMMON oot.o2r reused by every profile.
 #
-# We keep the CWD in WORK_DIR (so settings/saves stay per-user) and symlink the shared
-# ROM + common oot.o2r into it. If there's no common oot.o2r yet, SoH generates one from
-# the ROM this session and we promote it to SHARED_DIR so the next launch (and other
-# profiles) reuse it.
+# We keep the CWD in WORK_DIR (settings/saves stay per-user) and symlink the shared ROM +
+# common oot.o2r into it. If there's no common oot.o2r yet, SoH generates one from the ROM
+# and we promote it to SHARED_DIR so the next launch (and other profiles) reuse it.
 set -euo pipefail
 
 GAME_DIR=/opt/soh/usr/bin
 BIN="$GAME_DIR/soh.elf"
-WORK_DIR="${SOH_HOME:-$HOME/soh}"          # per-user (Wolf home)
+WORK_DIR="${SOH_HOME:-$HOME}"               # per-user Wolf home
 SHARED_DIR="${SOH_SHARED:-/mnt/soh-shared}" # shared mount: ROM + common oot.o2r
-MARKER="$SHARED_DIR/.soh-o2r-version"       # SoH version that generated the shared oot.o2r
+MARKER="$SHARED_DIR/.soh-o2r-version"        # SoH version that generated the shared oot.o2r
 IMAGE_VER="${SOH_VERSION:-unknown}"
+ROM_PATH=""
 
 log() { echo "[SoH] $*"; }
 major() { printf '%s' "${1%%.*}"; }
@@ -41,6 +44,7 @@ if [ -d "$SHARED_DIR" ]; then
   for rom in "$SHARED_DIR"/*.z64 "$SHARED_DIR"/*.n64 "$SHARED_DIR"/*.zip; do
     ln -sf "$rom" "./$(basename "$rom")"
     have_rom=1
+    ROM_PATH="$rom"
   done
   shopt -u nullglob
 fi
@@ -58,7 +62,6 @@ if [ -e "$SHARED_DIR/oot.o2r" ]; then
   rm -f oot.o2r oot-mq.o2r
   ln -sf "$SHARED_DIR/oot.o2r" oot.o2r
   if [ -e "$SHARED_DIR/oot-mq.o2r" ]; then ln -sf "$SHARED_DIR/oot-mq.o2r" oot-mq.o2r; fi
-  # Version check (warn only: the shared o2r is yours to manage; not auto-deleted).
   if [ -f "$MARKER" ]; then
     stored="$(cat "$MARKER" 2>/dev/null || echo unknown)"
     if [ "$(major "$stored")" != "$(major "$IMAGE_VER")" ]; then
@@ -66,12 +69,21 @@ if [ -e "$SHARED_DIR/oot.o2r" ]; then
       log "       Refrescalo: borra $SHARED_DIR/oot.o2r y arranca con la ROM presente, o reemplazalo."
     fi
   fi
-elif [ "$have_rom" = 1 ]; then
-  log "No hay oot.o2r comun: SoH lo generara desde la ROM (veras 'Processing OTR') y lo promociono luego."
+fi
+
+# Launch mode. SoH's extractor is GUI/popup-driven; there is NO fully headless
+# extraction in the runtime binary, so:
+#   - oot.o2r present  -> launch with no args  => ZERO prompts.
+#   - no oot.o2r + ROM -> pass the ROM as arg   => ONE confirm popup, then it extracts
+#                                                  and we promote it (so it's a one-time click).
+if [ -e oot.o2r ]; then
+  log "Arrancando $IMAGE_VER con oot.o2r presente (sin prompts). CWD=$WORK_DIR"
+  exec "$BIN" "$@"
+elif [ -n "$ROM_PATH" ]; then
+  log "Sin oot.o2r comun: arranco pasando la ROM ($ROM_PATH); SoH la extrae con un solo confirm."
+  exec "$BIN" "$ROM_PATH" "$@"
 else
   log "ERROR: no hay oot.o2r comun ni ROM en $SHARED_DIR."
   log "       Copia tu ROM (OoT NTSC 1.0 US, .z64) o un oot.o2r ya generado a la carpeta compartida."
+  exec "$BIN" "$@"
 fi
-
-log "Arrancando Ship of Harkinian $IMAGE_VER (CWD=$WORK_DIR, shared=$SHARED_DIR)"
-exec "$BIN" "$@"
