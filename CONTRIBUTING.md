@@ -9,10 +9,11 @@ convention-based, so adding an image needs zero CI config.
 parallel** and pushes to GHCR. It runs automatically:
 
 - **on push to `main`** — only the images whose folder changed (or all images if a shared CI file
-  changed);
-- **weekly** (cron) — rebuilds everything so `edge` and the version tags pick up base-app / OS security
-  updates even when this repo is untouched;
-- **manually** (`workflow_dispatch`) — optionally limited to a comma-separated list of image names.
+  changed). This is the publishing run: it pushes to GHCR and signs.
+- **on pull request** — the same build runs to **validate** the change, but does **not** push or sign,
+  so a Renovate bump that breaks the build is caught before it can merge;
+- **manually** (`workflow_dispatch`) — optionally limited to a comma-separated list of image names;
+  ignores the change detection and builds exactly what you ask for.
 
 Each image is tagged with:
 
@@ -35,11 +36,19 @@ runnable locally (`GITHUB_EVENT_NAME=workflow_dispatch bash .github/scripts/buil
 
 ### Version bumps (Renovate)
 
-[`renovate.json5`](renovate.json5) tracks the `ARG <APP>_VERSION=` pins. When upstream releases,
-Renovate opens a PR bumping the pin; merging it to `main` triggers a build that publishes the new
-`<version>` tag and refreshes `edge`. Auto-merge is intentionally **off** (an upstream release can break
-the build); enable it per-package by adding `"automerge": true` to a Renovate rule if you want fully
-hands-off updates.
+[`renovate.json5`](renovate.json5) keeps everything current automatically:
+
+- **App versions** — the `# renovate:`-annotated `ARG <APP>_VERSION=` pins (SoH, 2Ship, …). When
+  upstream releases, Renovate opens a PR bumping the pin.
+- **Base image** — `pinDigests` pins `base-app:edge` to a digest, so Renovate also tracks the rolling
+  base and bumps the digest when upstream republishes `edge` (the only way to follow a non-versioned
+  tag). The tag stays for readability; the digest is what builds.
+
+**Auto-merge policy:** patch/minor app releases and base-image digest bumps **merge themselves** once
+the PR build is green — day-to-day updates need no attention. **Major** bumps are left as a PR to
+review by hand (they can change the release asset layout or force a re-extraction). Merging any of them
+to `main` triggers the publishing build. Adjust the policy in the `packageRules` block of
+[`renovate.json5`](renovate.json5).
 
 ## Adding a new image
 
@@ -62,4 +71,3 @@ Zero CI config — the pipeline is convention-based:
 
 Add a `README.md` in the image folder explaining how to use it, and link it from the table in the
 root [README](README.md).
-2

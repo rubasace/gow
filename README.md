@@ -37,6 +37,5 @@ docker pull ghcr.io/rubasace/soh:9.2.3     # pinned to that SoH release
 
 ## Building & contributing
 
-How the build pipeline works (parallel multi-image CI, image signing, version bumps via Renovate),
-how to add a new image, and the one-time GHCR setup are documented in
-[CONTRIBUTING.md](CONTRIBUTING.md).
+How the build pipeline works (parallel multi-image CI, image signing, version bumps via Renovate) and
+how to add a new image are documented in [CONTRIBUTING.md](CONTRIBUTING.md).

@@ -4,6 +4,21 @@
     "config:recommended",
     "docker:enableMajor"
   ],
+  // Pin every Docker image to a digest (e.g. base-app:edge@sha256:...). The tag
+  // stays for readability; the digest is what builds. Because `edge` is a rolling
+  // tag with no version, this is the ONLY way Renovate can track the base image:
+  // when upstream republishes `edge`, Renovate opens a `digest` update PR.
+  "pinDigests": true,
+  "packageRules": [
+    // Day-to-day updates merge themselves once CI is green: patch/minor app
+    // releases (SoH bugfix/feature drops) plus base-image digest pins and bumps.
+    // Majors are deliberately left as a PR to review by hand — they can change
+    // the release asset layout or require a re-extraction, so a human looks first.
+    {
+      "matchUpdateTypes": ["minor", "patch", "digest", "pin"],
+      "automerge": true
+    }
+  ],
   "customManagers": [
     // Dockerfile ARGs: a `# renovate: datasource=<ds> depName=<name>` comment
     // followed by `ARG <ANYTHING>_VERSION=<value>` (e.g. SoH release pin).
@@ -14,7 +29,11 @@
       ],
       "matchStrings": [
         "# renovate:\\s*datasource=(?<datasource>\\S+)\\s+depName=(?<depName>\\S+)\\s+ARG\\s+\\w+_VERSION=(?<currentValue>\\S+)"
-      ]
+      ],
+      // Coerce so tags with or without a leading `v` (SoH `9.2.3`, OpenGOAL
+      // `v0.3.3`) classify into major/minor/patch correctly — automerge depends
+      // on that classification being right.
+      "versioningTemplate": "semver-coerced"
     }
   ]
 }
