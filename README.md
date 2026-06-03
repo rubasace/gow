@@ -19,6 +19,7 @@ Every image has its own README explaining how to use it (linked in the table bel
 | - | - | - | - |
 | [Ship of Harkinian](images/soh/README.md) | Native PC port of *The Legend of Zelda: Ocarina of Time* | `ghcr.io/rubasace/soh` | ✅ available |
 | [2 Ship 2 Harkinian](images/2s2h/README.md) | Native PC port of *The Legend of Zelda: Majora's Mask* | `ghcr.io/rubasace/2s2h` | ✅ available |
+| [Ghostship](images/ghostship/README.md) | Native PC port of *Super Mario 64* | `ghcr.io/rubasace/ghostship` | ✅ available |
 | OpenGOAL | Native PC port of *Jak and Daxter* | — | 🚧 coming soon |
 | EmulationStation (custom) | Front-end to launch the rest | — | 🗒️ planned |
 
