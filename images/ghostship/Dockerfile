@@ -111,11 +111,10 @@ ENV SDL_GAMECONTROLLERCONFIG_FILE=/opt/ghostship/usr/bin/gamecontrollerdb.txt
 # existing files). Drop more files into configs/ and they all land in /cfg.
 COPY configs/ /cfg/
 
-# Init flow: entrypoint runs /etc/cont-init.d/* as ROOT (we add 40-ghostship-bundle-links.sh to
-# bridge the shared sm64.o2r into the root-owned bundle), then drops to 'retro' and runs
-# startup-app.sh, which sources /opt/gow/startup.d/* (per-user setup: 10-ghostship-config.sh) and
-# finally launcher /opt/ghostship/launch-ghostship.sh. Users can mount more into either dir.
-COPY scripts/40-ghostship-bundle-links.sh /etc/cont-init.d/40-ghostship-bundle-links.sh
+# Init flow: base-app drops to 'retro' and runs startup-app.sh, which sources /opt/gow/startup.d/*
+# (per-user setup: 10-ghostship-config.sh — seeds the config and symlinks the shared sm64.o2r into
+# the home, where the game reads it) and finally runs launcher /opt/ghostship/launch-ghostship.sh.
+# Users can mount more into /opt/gow/startup.d/.
 COPY scripts/ghostship-lib.sh             /opt/ghostship/ghostship-lib.sh
 COPY scripts/startup-app.sh               /opt/gow/startup-app.sh
 COPY scripts/10-ghostship-config.sh       /opt/gow/startup.d/10-ghostship-config.sh

@@ -3,12 +3,12 @@
 # in /opt/gow/startup.d/10-ghostship-config.sh, which exports GHOSTSHIP_ROM_PATH (the ROM to
 # extract from) when there's no sm64.o2r yet.
 #
-#   sm64.o2r present  -> exec the binary, ZERO prompts.
+#   sm64.o2r present  -> launch the binary, ZERO prompts.
 #   sm64.o2r missing  -> build it HEADLESSLY with the bundled Torch CLI (see ghostship-lib.sh),
-#                        streaming Torch's output to the container logs, then exec -> the binary
-#                        finds it via the cont-init bundle bridge, ZERO prompts. Why not let
-#                        Ghostship extract itself: on Linux its in-app extractor draws a blocking
-#                        ImGui "Generate one now?" popup and then a zenity/kdialog file picker
+#                        streaming Torch's output to the container logs, then launch -> the binary
+#                        finds it in the home (10-config symlinks the shared copy in), ZERO prompts.
+#                        Why not let Ghostship extract itself: on Linux its in-app extractor draws a
+#                        blocking ImGui "Generate one now?" popup and then a zenity/kdialog file picker
 #                        base-app doesn't ship — a Moonlight gamepad can drive neither.
 #   extraction fails  -> log the error, tear down the compositor and exit. We do NOT launch the
 #                        binary into its GUI extractor (a gamepad can't drive it); failing loudly
@@ -52,6 +52,12 @@ if ! o2r_available; then
   log "sm64.o2r generated."
   if [ "$dest" = "$SHARED_DIR/sm64.o2r" ]; then publish_string "${GHOSTSHIP_VERSION:-unknown}" "$MARKER" || true; fi
 fi
+
+# Ghostship reads sm64.o2r from the data dir ONLY (GetPathRelativeToAppDirectory), so make sure the
+# shared copy is symlinked into the home before launch — covers a fresh extraction and a pre-existing
+# shared copy alike. Without this the game can't find it and bails to its (headless-undriveable)
+# extractor with exit(1).
+ensure_o2r_in_home
 
 log "Launching with sm64.o2r present (no prompts)."
 # Mirror the game's stdout+stderr both to the container log AND to a host-readable file in the

@@ -36,6 +36,20 @@ promote_o2r() {
   fi
 }
 
+# Make sm64.o2r visible where the GAME looks for it: the data dir ($SHIP_HOME). Ghostship resolves
+# it with GetPathRelativeToAppDirectory("sm64.o2r") — the data dir ONLY, NOT the bundle — so a copy
+# placed in the bundle would be invisible to it; it must sit in the home. We symlink the shared copy
+# in (the real
+# file stays in /roms, shared across profiles). A real file already in the home (e.g. extracted
+# while /roms was read-only) is left untouched. No-op if there's no shared copy yet.
+ensure_o2r_in_home() {
+  local home="${SHIP_HOME:-$HOME}"
+  [ -e "$SHARED_DIR/sm64.o2r" ] || return 0
+  if [ -L "$home/sm64.o2r" ] || [ ! -e "$home/sm64.o2r" ]; then
+    ln -sfn "$SHARED_DIR/sm64.o2r" "$home/sm64.o2r"
+  fi
+}
+
 # --- Headless first-run extraction (Super Mario 64) ------------------------------------------
 # Ghostship has no headless ROM->sm64.o2r path on Linux: with no sm64.o2r it draws a blocking
 # ImGui "Generate one now?" popup and then a zenity/kdialog file picker base-app doesn't ship —

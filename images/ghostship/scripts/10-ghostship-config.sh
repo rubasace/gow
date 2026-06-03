@@ -8,12 +8,12 @@
 #
 # Data model (three places):
 #   - Image bundle (/opt/ghostship/usr/bin) read-only: binary + ghostship.o2r + config.yml +
-#                                    assets + gamecontrollerdb.txt. Ghostship locates these in the
-#                                    bundle itself. /etc/cont-init.d/40-ghostship-bundle-links.sh
-#                                    (root) ALSO bridges sm64.o2r into the bundle -> the shared
-#                                    dir, so the home needs no o2r symlink.
-#   - SHIP_HOME  ($HOME = /home/retro, from the image ENV) PER-USER: Ghostship reads/writes
-#                                    config, saves, logs, mods and the extraction output here.
+#                                    assets + gamecontrollerdb.txt. Ghostship finds ghostship.o2r
+#                                    here via LocateFileAcrossAppDirs (it checks the bundle).
+#   - SHIP_HOME  ($HOME = /home/retro, from the image ENV) PER-USER: Ghostship reads/writes config,
+#                                    saves, logs, mods AND reads sm64.o2r here. sm64.o2r is resolved
+#                                    with GetPathRelativeToAppDirectory (the data dir ONLY, not the
+#                                    bundle), so the shared copy is symlinked INTO this home.
 #   - SHARED_DIR (/roms)             SHARED mount you provide: the ROM (.z64) and the COMMON
 #                                    sm64.o2r reused by every profile (+ mods/).
 #
@@ -42,12 +42,10 @@ if [ ! -f ghostship.cfg.json ] && [ -f /cfg/ghostship.cfg.json ]; then
   cp /cfg/ghostship.cfg.json ghostship.cfg.json
 fi
 
-# Nothing archive-related is symlinked into the home: ghostship.o2r/config.yml/assets/
-# gamecontrollerdb.txt are served from the bundle, and sm64.o2r is bridged into the bundle by the
-# cont-init script. Clean up any home bridges left by older image versions (symlinks only, never
-# real files — a freshly-generated real sm64.o2r awaiting promotion is NOT a symlink, so it's
-# preserved).
-for bridge in ghostship.o2r sm64.o2r config.yml assets gamecontrollerdb.txt; do
+# ghostship.o2r/config.yml/assets/gamecontrollerdb.txt are served from the bundle, so the home
+# needs no symlink for those — prune any left by older image versions (symlinks only, never real
+# files). sm64.o2r is handled separately below (it must live in the home), so it's NOT pruned here.
+for bridge in ghostship.o2r config.yml assets gamecontrollerdb.txt; do
   if [ -L "$bridge" ]; then rm -f "$bridge"; fi
 done
 shopt -s nullglob
@@ -89,6 +87,11 @@ fi
 # launch-ghostship.sh right after extraction (same session). No-op in steady state.
 promote_o2r
 
+# Make the shared sm64.o2r visible to the game by symlinking it into the home (the data dir is the
+# ONLY place Ghostship looks for it). Prune a stale/dangling link first.
+if [ -L sm64.o2r ] && [ ! -e sm64.o2r ]; then rm -f sm64.o2r; fi
+ensure_o2r_in_home
+
 # Mods: symlink provided mod archives from the shared dir into the per-user mods folder.
 # Symlink (not copy: would duplicate big packs per profile; not hardlink: can't cross the
 # shared->home mount boundary). Enabling/disabling is a per-user toggle that persists.
@@ -111,7 +114,7 @@ shopt -u nullglob
 #   - no sm64.o2r + ROM  -> the ROM path; launch builds sm64.o2r headlessly via the bundled Torch
 #                           CLI and publishes it back (no in-app GUI extractor, no clicks).
 if [ -e "$SHARED_DIR/sm64.o2r" ] || [ -e sm64.o2r ]; then
-  log "sm64.o2r available (shared bundle bridge) -> launching without prompts."
+  log "sm64.o2r present (linked into the home) -> launching without prompts."
   export GHOSTSHIP_ROM_PATH=""
 elif [ -n "$ROM_PATH" ]; then
   log "No common sm64.o2r -> launch will build it from the ROM ($ROM_PATH) headlessly."
