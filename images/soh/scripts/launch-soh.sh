@@ -23,6 +23,12 @@ cd "$HOME_DIR" 2>/dev/null || true
 # shellcheck source=/dev/null
 source /opt/soh/soh-lib.sh   # fsize, publish_file, publish_string, promote_o2r
 
+# base-app runs us as the sway session command (`exec <us> && killall sway`), so it only tears the
+# compositor down when we exit 0 — a failure would otherwise leave the container up on an empty
+# desktop ("stuck"). So we stop the compositor ourselves on every exit path: any failure that keeps
+# the game from running, and the normal game exit too, must end the session.
+stop_compositor() { killall sway gamescope 2>/dev/null || true; }
+
 o2r_available() {
   [ -e oot.o2r ] || [ -e oot-mq.o2r ] || [ -e "$SHARED_DIR/oot.o2r" ] || [ -e "$SHARED_DIR/oot-mq.o2r" ]
 }
@@ -67,14 +73,19 @@ fi
 
 if o2r_available; then
   echo "[SoH] Launching with oot.o2r present (no prompts)."
-  exec "$BIN"
+  "$BIN"
+  rc=$?
+  stop_compositor   # end the streaming session when the game exits, whatever the exit code
+  exit "$rc"
 fi
 
 # No usable oot.o2r. Do NOT launch the binary into its GUI extractor/confirm popup (a Moonlight
-# gamepad can't drive it) — fail loudly in the logs instead of hanging on an un-dismissable dialog.
+# gamepad can't drive it) — fail loudly and end the session instead of hanging on an un-dismissable
+# dialog.
 if [ -n "${SOH_ROM_ARG:-}" ]; then
   echo "[SoH] ERROR: extraction did not produce oot.o2r from '$SOH_ROM_ARG'. Verify the ROM (OoT NTSC 1.0 US) and that $SHARED_DIR is writable. Exiting." >&2
 else
   echo "[SoH] ERROR: no oot.o2r and no ROM in $SHARED_DIR. Provide an OoT NTSC 1.0 US .z64 or a prebuilt oot.o2r. Exiting." >&2
 fi
+stop_compositor
 exit 1
