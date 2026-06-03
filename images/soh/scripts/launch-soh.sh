@@ -68,10 +68,13 @@ fi
 if o2r_available; then
   echo "[SoH] Launching with oot.o2r present (no prompts)."
   exec "$BIN"
-elif [ -n "${SOH_ROM_ARG:-}" ]; then
-  echo "[SoH] No oot.o2r after extraction; launching with the ROM so SoH can surface the issue."
-  exec "$BIN" "$SOH_ROM_ARG"
-else
-  echo "[SoH] Launching Ship of Harkinian."
-  exec "$BIN"
 fi
+
+# No usable oot.o2r. Do NOT launch the binary into its GUI extractor/confirm popup (a Moonlight
+# gamepad can't drive it) — fail loudly in the logs instead of hanging on an un-dismissable dialog.
+if [ -n "${SOH_ROM_ARG:-}" ]; then
+  echo "[SoH] ERROR: extraction did not produce oot.o2r from '$SOH_ROM_ARG'. Verify the ROM (OoT NTSC 1.0 US) and that $SHARED_DIR is writable. Exiting." >&2
+else
+  echo "[SoH] ERROR: no oot.o2r and no ROM in $SHARED_DIR. Provide an OoT NTSC 1.0 US .z64 or a prebuilt oot.o2r. Exiting." >&2
+fi
+exit 1
