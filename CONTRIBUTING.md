@@ -71,3 +71,13 @@ Zero CI config — the pipeline is convention-based:
 
 Add a `README.md` in the image folder explaining how to use it, and link it from the table in the
 root [README](README.md).
+
+### Fail fast, never hang
+
+Anything that stops the game from starting — a missing or unsupported ROM, a failed asset
+extraction — must **end the streaming session**, not leave the container up on an empty desktop a
+Moonlight user can't escape. base-app only tears the compositor down when the launch command exits
+`0` (its sway config runs `exec <cmd> && killall sway`), so on any fatal path the launcher must stop
+the compositor itself — `killall sway gamescope` — before exiting, and it must never drop the user
+into a GUI prompt a gamepad can't dismiss. The existing `launch-*.sh` scripts do this; copy the
+pattern.

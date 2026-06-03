@@ -10,9 +10,9 @@
 #                        Ghostship extract itself: on Linux its in-app extractor draws a blocking
 #                        ImGui "Generate one now?" popup and then a zenity/kdialog file picker
 #                        base-app doesn't ship — a Moonlight gamepad can drive neither.
-#   extraction fails  -> log the error and EXIT non-zero. We do NOT launch the binary into its GUI
-#                        extractor (a gamepad can't drive it); failing loudly in the logs beats a
-#                        silent hang on an un-dismissable dialog.
+#   extraction fails  -> log the error, tear down the compositor and exit. We do NOT launch the
+#                        binary into its GUI extractor (a gamepad can't drive it); failing loudly
+#                        and ending the session beats a silent hang on an un-dismissable dialog.
 #
 # No `set -e`: we branch on the extraction result explicitly and exit on failure.
 set -uo pipefail
@@ -27,8 +27,14 @@ cd "$HOME_DIR" 2>/dev/null || true
 # shellcheck source=/dev/null
 source /opt/ghostship/ghostship-lib.sh   # publish_*, promote_o2r, rom_supported, torch_extract
 
+# base-app runs us as the sway session command (`exec <us> && killall sway`), so it only tears the
+# compositor down when we exit 0 — a failure would otherwise leave the container up on an empty
+# desktop ("stuck"). So we stop the compositor ourselves on every exit path: any failure that keeps
+# the game from running, and the normal game exit too, must end the session.
+stop_compositor() { killall sway gamescope 2>/dev/null || true; }
+
 log() { echo "[Ghostship] $*"; }
-die() { echo "[Ghostship] ERROR: $*" >&2; exit 1; }
+die() { echo "[Ghostship] ERROR: $*" >&2; stop_compositor; exit 1; }
 o2r_available() { [ -e sm64.o2r ] || [ -e "$SHARED_DIR/sm64.o2r" ]; }
 
 if ! o2r_available; then
@@ -48,4 +54,7 @@ if ! o2r_available; then
 fi
 
 log "Launching with sm64.o2r present (no prompts)."
-exec env LD_LIBRARY_PATH="$LIBS:${LD_LIBRARY_PATH:-}" "$BIN"
+env LD_LIBRARY_PATH="$LIBS:${LD_LIBRARY_PATH:-}" "$BIN"
+rc=$?
+stop_compositor   # end the streaming session when the game exits, whatever the exit code
+exit "$rc"

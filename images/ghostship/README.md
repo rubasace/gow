@@ -31,7 +31,7 @@ it on first launch.
    host's docker socket), from this folder:
    ```bash
    docker build -t ghostship:wolf .
-   # pin a version: docker build --build-arg GHOSTSHIP_VERSION=2.0.0 -t ghostship:wolf .
+   # pin a version: docker build --build-arg GHOSTSHIP_VERSION=1.0.2 -t ghostship:wolf .
    ```
 2. **Shared folder + ROM** on the host:
    ```bash

@@ -70,8 +70,10 @@ torch_extract() { # <rom-abs> <dest>
   local rom="$1" dest="$2" td rc
   [ -x "$TORCH_BIN" ] && [ -f "$TORCH_SRC/config.yml" ] || return 1
   td="$(mktemp -d 2>/dev/null)" || return 1
-  ( cd "$td" && timeout 900 "$TORCH_BIN" o2r "$rom" \
-      -s "$TORCH_SRC" -d "$td" -u "${GHOSTSHIP_VERSION:-0.0.0}" )
+  # No -u/--version: that flag isn't on the o2r subcommand in every Torch revision Ghostship has
+  # pinned, and the version stamp is optional metadata for the ROM archive. Torch keys the asset
+  # set on the ROM's sha1 via config.yml regardless.
+  ( cd "$td" && timeout 900 "$TORCH_BIN" o2r "$rom" -s "$TORCH_SRC" -d "$td" )
   rc=$?
   if [ "$rc" = 0 ] && [ -s "$td/sm64.o2r" ] && publish_file "$td/sm64.o2r" "$dest"; then
     rm -rf "$td"; return 0
