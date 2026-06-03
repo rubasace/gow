@@ -54,7 +54,23 @@ if ! o2r_available; then
 fi
 
 log "Launching with sm64.o2r present (no prompts)."
-env LD_LIBRARY_PATH="$LIBS:${LD_LIBRARY_PATH:-}" "$BIN"
-rc=$?
+# Mirror the game's stdout+stderr both to the container log AND to a host-readable file in the
+# shared dir — the per-user home isn't mounted on the host, and the game otherwise writes its real
+# log to a file we can't see. This makes a startup failure diagnosable from outside the container.
+run_log="$SHARED_DIR/ghostship-last-run.log"
+env LD_LIBRARY_PATH="$LIBS:${LD_LIBRARY_PATH:-}" "$BIN" 2>&1 | tee "$run_log" 2>/dev/null
+rc=${PIPESTATUS[0]}
+log "Ghostship exited with code $rc (stdout/stderr mirrored to $run_log)."
+# Also surface libultraship's own file log (it logs there, not to stdout). Search broadly — the
+# path/name varies by version — dump the newest to the container log and copy it beside run_log.
+newest_log="$(find "$HOME_DIR" -maxdepth 3 -type f -name '*.log' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | cut -d' ' -f2-)"
+if [ -n "${newest_log:-}" ]; then
+  echo "[Ghostship] ===== game log: $newest_log =====" >&2
+  tail -n 80 "$newest_log" >&2 || true
+  echo "[Ghostship] ===== end game log =====" >&2
+  cp -f "$newest_log" "$SHARED_DIR/ghostship-game.log" 2>/dev/null || true
+else
+  echo "[Ghostship] no libultraship .log found under $HOME_DIR (crashed before logging?)" >&2
+fi
 stop_compositor   # end the streaming session when the game exits, whatever the exit code
 exit "$rc"
