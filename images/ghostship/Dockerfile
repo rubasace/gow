@@ -1,7 +1,7 @@
 ARG BASE_APP_IMAGE=ghcr.io/games-on-whales/base-app:edge
 
 # renovate: datasource=github-releases depName=HarbourMasters/Ghostship
-ARG GHOSTSHIP_VERSION=2.0.0
+ARG GHOSTSHIP_VERSION=1.0.2
 
 ############################################################
 # Stage 1 - fetch + extract the official Linux AppImage
