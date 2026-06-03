@@ -4,8 +4,6 @@
 # Functions read these globals at call time: SHARED_DIR, S2H_VERSION, and the CWD (the home).
 # Pure helpers (no logging, no shell-option changes) so they're safe under the caller's `set`.
 
-fsize() { stat -c%s "$1" 2>/dev/null || stat -f%z "$1" 2>/dev/null || echo 0; }
-
 # Atomic publish to the shared dir: write to a unique temp in the SAME dir, then rename
 # (atomic on one filesystem). A concurrent session never sees a half-written file, and two
 # simultaneous publishes each land a COMPLETE file (last rename wins; both are valid).
@@ -63,10 +61,11 @@ detect_zapd_ver() { # <rom>
 
 # Build mm.o2r from a ROM with the standalone ZAPD, mirroring Extractor::CallZapd verbatim: cd
 # into a tempdir with `assets` symlinked, run with relative -i/-rconf/-fl and --otrfile mm.o2r,
-# then publish the result to <dest> atomically. Returns 0 on success, 1 on any failure. All ZAPD
-# output is captured to <logfile> so a failed run is diagnosable. Bounded by `timeout`.
-zapd_extract() { # <rom-abs> <ver> <dest> <logfile>
-  local rom="$1" ver="$2" dest="$3" logfile="$4" td rc
+# then publish the result to <dest> atomically. Returns 0 on success, 1 on any failure. ZAPD's
+# output goes straight to the caller's stdout/stderr (the container logs) — no temp logfile, and
+# nothing written to the user's home. Bounded by `timeout`.
+zapd_extract() { # <rom-abs> <ver> <dest>
+  local rom="$1" ver="$2" dest="$3" td rc
   [ -x "$ZAPD_BIN" ] && [ -d "$ZAPD_ASSETS/xml/$ver" ] || return 1
   td="$(mktemp -d 2>/dev/null)" || return 1
   ln -sfn "$ZAPD_ASSETS" "$td/assets"
@@ -74,8 +73,7 @@ zapd_extract() { # <rom-abs> <ver> <dest> <logfile>
       timeout 600 "$ZAPD_BIN" ed \
         -i "assets/xml/$ver" -b "$rom" -fl assets/filelists -gsf 0 \
         -rconf "assets/Config_$ver.xml" -se OTR --otrfile mm.o2r \
-        --portVer "${S2H_VERSION:-0.0.0}" -o placeholder -osf placeholder \
-  ) >"$logfile" 2>&1
+        --portVer "${S2H_VERSION:-0.0.0}" -o placeholder -osf placeholder )
   rc=$?
   if [ "$rc" = 0 ] && [ -s "$td/mm.o2r" ] && publish_file "$td/mm.o2r" "$dest"; then
     rm -rf "$td"; return 0

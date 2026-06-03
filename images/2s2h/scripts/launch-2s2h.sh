@@ -4,54 +4,47 @@
 # from) when there's no mm.o2r yet.
 #
 #   mm.o2r present  -> exec the binary, ZERO prompts.
-#   mm.o2r missing  -> build it HEADLESSLY with the bundled ZAPD CLI (see 2s2h-lib.sh), publish
-#                      it to /roms, then exec -> the binary finds it via the cont-init bundle
-#                      bridge, ZERO prompts. Why not let 2S2H extract itself: its in-app
-#                      extractor (InitOTR) is gated behind a blocking SDL "Generate one now?"
-#                      box and a zenity/kdialog file picker base-app doesn't ship — a Moonlight
-#                      gamepad can dismiss neither, and the argv extract path SoH uses is dead
-#                      code in 2S2H 4.0.2.
-#   ZAPD failed     -> fall back to 2S2H's own extractor: drop the ROM into its search dir (the
-#                      home) and exec plainly. That still needs a MOUSE to click through once,
-#                      but it's a real escape hatch instead of a hang.
+#   mm.o2r missing  -> build it HEADLESSLY with the bundled ZAPD CLI (see 2s2h-lib.sh), streaming
+#                      ZAPD's output to the container logs, then exec -> the binary finds it via
+#                      the cont-init bundle bridge, ZERO prompts. Why not let 2S2H extract itself:
+#                      its in-app extractor (InitOTR) is gated behind a blocking SDL "Generate one
+#                      now?" box and a zenity/kdialog file picker base-app doesn't ship — a
+#                      Moonlight gamepad can dismiss neither, and the argv extract path SoH uses is
+#                      dead code in 2S2H 4.0.2.
+#   extraction fails-> log the error and EXIT non-zero. We do NOT launch the binary into its GUI
+#                      extractor (a gamepad can't drive it); failing loudly in the logs beats a
+#                      silent hang on an un-dismissable dialog.
 #
-# No `set -e`: extraction failure must fall through to the fallback, not abort the launch.
+# No `set -e`: we branch on the extraction result explicitly and exit on failure.
 set -uo pipefail
 
 BIN=/opt/2s2h/usr/bin/2s2h.elf
 HOME_DIR="${SHIP_HOME:-$HOME}"
 SHARED_DIR="${S2H_SHARED:-/roms}"
 MARKER="$SHARED_DIR/.2s2h-o2r-version"
-EXTRACT_LOG="$HOME_DIR/2s2h-extract.log"
 cd "$HOME_DIR" 2>/dev/null || true
 
 # shellcheck source=/dev/null
-source /opt/2s2h/2s2h-lib.sh   # fsize, publish_*, promote_o2r, detect_zapd_ver, zapd_extract
+source /opt/2s2h/2s2h-lib.sh   # publish_*, promote_o2r, detect_zapd_ver, zapd_extract
 
 log() { echo "[2S2H] $*"; }
+die() { echo "[2S2H] ERROR: $*" >&2; exit 1; }
 o2r_available() { [ -e mm.o2r ] || [ -e "$SHARED_DIR/mm.o2r" ]; }
 
-if ! o2r_available && [ -n "${S2H_ROM_PATH:-}" ]; then
+if ! o2r_available; then
+  [ -n "${S2H_ROM_PATH:-}" ] || die "no mm.o2r and no ROM in $SHARED_DIR. Provide a supported NTSC-U .z64 or a prebuilt mm.o2r."
+
   ver="$(detect_zapd_ver "$S2H_ROM_PATH")"
   # Prefer publishing the shared (common) copy; fall back to the per-user home if /roms is RO.
   if [ -d "$SHARED_DIR" ] && [ -w "$SHARED_DIR" ]; then dest="$SHARED_DIR/mm.o2r"; else dest="$HOME_DIR/mm.o2r"; fi
-  log "First run: building mm.o2r from the ROM headlessly via ZAPD ($ver) -> $dest"
-  log "      (takes a moment; full extractor output in $EXTRACT_LOG)"
-  if zapd_extract "$S2H_ROM_PATH" "$ver" "$dest" "$EXTRACT_LOG"; then
-    log "mm.o2r generated."
-    if [ "$dest" = "$SHARED_DIR/mm.o2r" ]; then publish_string "${S2H_VERSION:-unknown}" "$MARKER" || true; fi
-  else
-    log "Headless ZAPD extraction failed (see $EXTRACT_LOG) -> falling back to 2S2H's own extractor."
-    log "      It will pop a 'Generate one now?' dialog; dismiss it with a MOUSE (one-time)."
-    # 2S2H's extractor searches GetAppDirectoryPath() (= the home) for the ROM; symlinking it
-    # there lets it auto-detect and avoids the (missing) zenity/kdialog file picker.
-    ln -sf "$S2H_ROM_PATH" "./$(basename "$S2H_ROM_PATH")" 2>/dev/null || true
+  log "First run: building mm.o2r from the ROM headlessly via ZAPD ($ver) -> $dest (output follows)"
+
+  if ! zapd_extract "$S2H_ROM_PATH" "$ver" "$dest"; then
+    die "ZAPD failed to generate mm.o2r from '$S2H_ROM_PATH' (output above). Verify it's a supported NTSC-U dump (sha1 d6133ace… for N64 1.0, 9743aa02… for GC) at https://2ship.equipment/."
   fi
+  log "mm.o2r generated."
+  if [ "$dest" = "$SHARED_DIR/mm.o2r" ]; then publish_string "${S2H_VERSION:-unknown}" "$MARKER" || true; fi
 fi
 
-if o2r_available; then
-  log "Launching with mm.o2r present (no prompts)."
-else
-  log "Launching 2 Ship 2 Harkinian."
-fi
+log "Launching with mm.o2r present (no prompts)."
 exec "$BIN"
