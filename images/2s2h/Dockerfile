@@ -56,9 +56,8 @@ ENV SHIP_HOME=/home/retro
 
 # Default settings, seeded into the per-user home on first launch (see 10-2s2h-config.sh).
 # /cfg is base-app's convention for baked default configs (it ships sway/waybar there too);
-# COPY merges into it (never wipes existing files). NOTE: no 2ship2harkinian.json is shipped
-# yet — the seeding is wired up but inert until you drop one in configs/ (the script only
-# seeds when /cfg/2ship2harkinian.json exists). Boot once, configure, then commit your JSON.
+# COPY merges into it (never wipes existing files), exactly like es-de. Drop more files into
+# configs/ and they all land in /cfg.
 COPY configs/ /cfg/
 
 # Init flow: entrypoint runs /etc/cont-init.d/* as ROOT (we add 40-2s2h-bundle-links.sh to

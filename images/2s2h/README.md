@@ -58,9 +58,9 @@ launch.
 | **NTSC-U GC** | `9743aa026e9269b339eb0e3044cd5830a440c1fd` |
 
 **PAL/Europe and JP ROMs are not supported** and extraction will fail on them — there's no PAL/JP
-config in the extractor. Verify your dump at <https://2ship.equipment/>. If the headless ZAPD build
-fails for any reason, the launcher falls back to 2S2H's own extractor (which needs a **mouse** to click
-through, once); the full ZAPD output is written to `~/2s2h-extract.log` in the profile home.
+config in the extractor. Verify your dump at <https://2ship.equipment/>. ZAPD's output streams to the
+container logs; if extraction fails the container logs the error and **exits** (no silent hang on a GUI
+prompt) — fix the ROM and reconnect.
 
 ## Updating
 
@@ -76,10 +76,9 @@ The version pin (`ARG S2H_VERSION` in the Dockerfile) is kept up to date by Reno
 
 ## Settings and mods
 
-- **Settings:** unlike `soh`, **no default `2ship2harkinian.json` ships yet** — the seeding is wired up
-  but inert, so the first launch uses 2S2H's own defaults. To bake your own defaults: boot once,
-  configure it (fullscreen, OpenGL, controller mapping…), then copy the generated `2ship2harkinian.json`
-  from the home into `configs/` and commit it.
+- **Settings:** the image ships a default `2ship2harkinian.json` (fullscreen, match refresh rate,
+  OpenGL, a pre-mapped controller), seeded into a profile **only on first launch**. After that the
+  user's own changes persist per-profile.
 - **Mods:** drop `.o2r` / `.otr` files in `/mnt/wolf/shared/2ship2harkinian/mods/`; they're symlinked
   into each profile's `mods/` on launch (shared once, not duplicated per profile). To enable one by
   default its filename must match the enabled-mods list in the JSON; disabling is a toggle in 2S2H's

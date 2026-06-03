@@ -27,7 +27,7 @@ ROM_PATH=""
 log() { echo "[2S2H] $*"; }
 major() { printf '%s' "${1%%.*}"; }
 
-# Shared helpers: fsize, publish_file, publish_string, promote_o2r (atomic temp+rename).
+# Shared helpers: publish_file, publish_string, promote_o2r, detect_zapd_ver, zapd_extract.
 # shellcheck source=/dev/null
 source /opt/2s2h/2s2h-lib.sh
 
@@ -35,8 +35,7 @@ mkdir -p "$WORK_DIR"
 cd "$WORK_DIR"
 
 # Seed default settings on first run (per-user). Copy only if absent, so the user's own
-# changes persist across launches. Inert until a 2ship2harkinian.json is shipped in /cfg
-# (see the Dockerfile note) — boot once, configure, then commit that JSON to configs/.
+# changes persist across launches.
 if [ ! -f 2ship2harkinian.json ] && [ -f /cfg/2ship2harkinian.json ]; then
   log "Seeding default 2ship2harkinian.json from /cfg."
   cp /cfg/2ship2harkinian.json 2ship2harkinian.json

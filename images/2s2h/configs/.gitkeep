@@ -1,6 +1,0 @@
-# Keeps configs/ tracked so the Dockerfile's `COPY configs/ /cfg/` works.
-#
-# No 2ship2harkinian.json is shipped yet: the seeding in 10-2s2h-config.sh only fires when
-# /cfg/2ship2harkinian.json exists, so it stays inert until you add one here. Boot 2S2H once,
-# configure it to taste, then copy the generated 2ship2harkinian.json from the per-user home
-# into this folder and commit it — it'll seed every fresh profile on first launch (SoH style).
