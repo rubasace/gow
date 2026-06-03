@@ -7,6 +7,11 @@
       "PreventActorInit": 0,
       "PreventActorUpdate": 0
     },
+    "gEnhancements": {
+      "Mods": {
+        "AlternateAssets": 1
+      }
+    },
     "gMatchRefreshRate": 1,
     "gRando": {
       "SpoilerFile": "",
